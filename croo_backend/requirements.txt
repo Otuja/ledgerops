@@ -1,0 +1,11 @@
+django
+djangorestframework
+django-cors-headers
+python-decouple
+whitenoise
+dj-database-url
+croo-sdk
+gunicorn
+# Type stubs — teach Pyright about Django's ORM (objects, Manager, QuerySet, etc.)
+django-stubs
+django-stubs-ext

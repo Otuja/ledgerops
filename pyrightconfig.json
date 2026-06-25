@@ -1,0 +1,5 @@
+{
+  "extraPaths": ["croo_backend"],
+  "venvPath": "croo_backend",
+  "venv": "venv"
+}
