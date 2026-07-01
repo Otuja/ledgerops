@@ -20,51 +20,8 @@ services:
         value: 3.10.0
       - key: DEBUG
         value: "False"
-      # Render will set this dummy key initially to pass the build, but sync: false ensures 
-      # that when you change it to your real secure key in the dashboard, Render will never overwrite it again!
-      - key: DJANGO_SECRET_KEY
-        value: "temporary-render-dummy-key-change-me-later-12345"
-        sync: false
-        
-      # The following keys will appear in your dashboard for you to fill in securely.
-      # sync: false guarantees they will never be deleted or overwritten by Git pushes!
       - key: ALLOWED_HOSTS
-        sync: false
+        value: "*"
       - key: CORS_ALLOWED_ORIGINS
-        sync: false
-      - key: CROO_API_URL
-        sync: false
-      - key: CROO_WS_URL
-        sync: false
-      - key: BASE_RPC_URL
-        sync: false
-      - key: CROO_RPC_URL
-        sync: false
-      - key: CROO_SDK_KEY
-        sync: false
-      - key: CROO_API_KEY
-        sync: false
-      - key: LEDGEROPS_AGENT_ID
-        sync: false
-      - key: CROO_ORCHESTRATOR_SDK_KEY
-        sync: false
-      - key: ORCHESTRATOR_AGENT_ID
-        sync: false
-      - key: CROO_SECONDARY_BUYER_SDK_KEY
-        sync: false
-      - key: SECONDARY_BUYER_AGENT_ID
-        sync: false
-      - key: CROO_REQUESTER_SDK_KEY
-        sync: false
-      - key: CROO_SERVICE_ID_DEFAULT
-        sync: false
-      - key: CROO_SERVICE_ID_TRUST
-        sync: false
-      - key: CROO_SERVICE_ID_BALANCE
-        sync: false
-      - key: CROO_SERVICE_ID_VERIFY
-        sync: false
-      - key: CROO_SERVICE_ID_REPORT
-        sync: false
-      - key: CROO_SERVICE_ID_EXPORT
-        sync: false
+        value: "http://localhost:5173,http://127.0.0.1:5173,https://ledgerops-dashboard.vercel.app,*"
+
