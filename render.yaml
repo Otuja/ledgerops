@@ -22,7 +22,7 @@ services:
         value: "False"
       # Provide a dummy key so the initial build doesn't crash. Change this in the dashboard later!
       - key: DJANGO_SECRET_KEY
-        value: "django-insecure-render-dummy-key-change-me-later-12345"
+        value: "temporary-render-dummy-key-change-me-later-12345"
       # These must be filled in the Render dashboard:
       # - ALLOWED_HOSTS
       # - CORS_ALLOWED_ORIGINS
