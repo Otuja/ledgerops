@@ -8,8 +8,8 @@ services:
   - type: web
     name: ledgerops-api
     env: python
-    buildCommand: "./croo_backend/build.sh"
-    startCommand: "cd croo_backend && gunicorn croo_backend.wsgi:application"
+    buildCommand: "pip install -r croo_backend/requirements.txt && cd croo_backend && python manage.py collectstatic --no-input && python manage.py migrate"
+    startCommand: "cd croo_backend && (python manage.py run_agent &) && gunicorn croo_backend.wsgi:application"
     plan: free
     envVars:
       - key: DATABASE_URL
@@ -29,19 +29,3 @@ services:
       # - CROO_REQUESTER_SDK_KEY
       # - LEDGEROPS_AGENT_ID
       # - CROO_SERVICE_ID_DEFAULT
-
-  - type: worker
-    name: ledgerops-agent-worker
-    env: python
-    buildCommand: "pip install -r croo_backend/requirements.txt"
-    startCommand: "cd croo_backend && python manage.py run_agent"
-    plan: free
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: ledgerops-db
-          property: connectionString
-      - key: PYTHON_VERSION
-        value: 3.10.0
-      - key: DEBUG
-        value: "False"
