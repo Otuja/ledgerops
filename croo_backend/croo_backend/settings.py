@@ -192,9 +192,12 @@ LOGGING = {
 # CORS_ALLOWED_ORIGINS in your .env (or cloud environment variables).
 # ─────────────────────────────────────────────────────────────────────────────
 
+import sys
+
 if not DEBUG:
-    # Require a real SECRET_KEY in production
-    if SECRET_KEY.startswith('django-insecure'):
+    # Require a real SECRET_KEY in production, but bypass this check during Render's build phase
+    is_build_cmd = any(cmd in sys.argv for cmd in ['collectstatic', 'migrate'])
+    if SECRET_KEY.startswith('django-insecure') and not is_build_cmd:
         raise ValueError(
             "DJANGO_SECRET_KEY must be changed from the default insecure value before deploying. "
             "Generate one with: python -c \"from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())\""
