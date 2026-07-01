@@ -139,7 +139,6 @@ KEYS = {
     'OriginalReq':    env('CROO_REQUESTER_SDK_KEY',         default=''),
     'Orchestrator':   env('CROO_ORCHESTRATOR_SDK_KEY',      default=''),
     'SecondaryBuyer': env('CROO_SECONDARY_BUYER_SDK_KEY',   default=''),
-    'Citeable':       env('CROO_CITEABLE_SDK_KEY',          default=''),
 }
 
 # ── Agent IDs (used in trust score metadata strings) ──────────────────────────
@@ -148,7 +147,6 @@ AGENT_IDS = {
     'LedgerOps':      env('LEDGEROPS_AGENT_ID',             default=''),
     'Orchestrator':   env('ORCHESTRATOR_AGENT_ID',          default=''),
     'SecondaryBuyer': env('SECONDARY_BUYER_AGENT_ID',       default=''),
-    'Citeable':       env('CITEABLE_AGENT_ID',              default=''),
 }
 
 # ── LedgerOps service IDs ─────────────────────────────────────────────────────
@@ -161,12 +159,7 @@ LEDGEROPS_SERVICES = {
     'default': env('CROO_SERVICE_ID_DEFAULT', default=''),
 }
 
-# ── Citeable service IDs (optional) ──────────────────────────────────────────
-
-CITEABLE_SERVICES = {
-    'verify':    env('CROO_SERVICE_ID_CITEABLE_VERIFY',    default=''),
-    'factcheck': env('CROO_SERVICE_ID_CITEABLE_FACTCHECK', default=''),
-}
+# No optional Citeable services — all 3 providers are LedgerOps
 
 
 # ── Call specification ────────────────────────────────────────────────────────
@@ -197,7 +190,7 @@ class CallSpec:
         metadata_fn,        # () -> str
         requirements: str,
         notes: str,
-        requires_config: list[str] = None,  # env-var names that must be non-empty
+        requires_config: list[str] | None = None,  # env-var names that must be non-empty
     ):
         self.call_index         = call_index
         self.round_name         = round_name
@@ -253,6 +246,9 @@ def build_sequence() -> list[CallSpec]:
     # Before any agent hires another, they check the counterparty's trust score.
     # This is exactly the intended use-case for the Trust Score Lookup service.
 
+    # ── ROUND A: Trust due-diligence ──────────────────────────────────────────
+    # Before hiring anyone, each buyer checks the other's trust score first.
+
     seq.append(CallSpec(
         call_index=1,
         round_name='A',
@@ -261,16 +257,16 @@ def build_sequence() -> list[CallSpec]:
         service_name='trust_score_lookup',
         sdk_key_fn   = lambda: KEYS['Orchestrator'],
         service_id_fn= lambda: LEDGEROPS_SERVICES['trust'],
-        metadata_fn  = lambda: f"trust:{AGENT_IDS['SecondaryBuyer'] or '<unknown_secondary>'}",
+        metadata_fn  = lambda: '{{"command": "trust", "target": "{}"}}'.format(AGENT_IDS['SecondaryBuyer'] or '<unknown_secondary>'),
         requirements = (
-            "Trust score report on a potential subagent (SecondaryBuyer) "
-            "before Orchestrator assigns them a data-processing task. "
-            "Need completion rate, dispute rate, and buyer diversity."
+            '{"task": "Trust score report on a potential subagent (SecondaryBuyer) '
+            'before Orchestrator assigns them a data-processing task. '
+            'Need completion rate, dispute rate, and buyer diversity."}'
         ),
         notes=(
             "Orchestrator vets SecondaryBuyer before engaging them. "
-            "Demonstrates real business use: pre-hire due diligence on counterparty. "
-            "Buyer: Orchestrator wallet → Provider: LedgerOps."
+            "Pre-hire due diligence on counterparty. "
+            "Buyer: Orchestrator wallet -> Provider: LedgerOps."
         ),
     ))
 
@@ -282,170 +278,99 @@ def build_sequence() -> list[CallSpec]:
         service_name='trust_score_lookup',
         sdk_key_fn   = lambda: KEYS['SecondaryBuyer'],
         service_id_fn= lambda: LEDGEROPS_SERVICES['trust'],
-        metadata_fn  = lambda: f"trust:{AGENT_IDS['Orchestrator'] or '<unknown_orchestrator>'}",
+        metadata_fn  = lambda: '{{"command": "trust", "target": "{}"}}'.format(AGENT_IDS['Orchestrator'] or '<unknown_orchestrator>'),
         requirements = (
-            "Trust score report on Orchestrator agent before accepting work orders "
-            "from them. Need to verify completion rate and dispute history."
+            '{"task": "Trust score report on Orchestrator agent before accepting work orders '
+            'from them. Need to verify completion rate and dispute history."}'
         ),
         notes=(
             "SecondaryBuyer checks Orchestrator's reputation before agreeing to be hired. "
             "2nd distinct buyer wallet transacting with LedgerOps. "
-            "Demonstrates mutual due-diligence, not just one-directional."
+            "Mutual due-diligence, not just one-directional."
         ),
-    ))
-
-    seq.append(CallSpec(
-        call_index=3,
-        round_name='A',
-        buyer_label='LedgerOps',
-        counterparty_label='Citeable',
-        service_name='citeable_verify',
-        sdk_key_fn   = lambda: KEYS['LedgerOps'],
-        service_id_fn= lambda: CITEABLE_SERVICES['verify'],
-        metadata_fn  = lambda: 'verify',
-        requirements = (
-            "Verify the claim: 'LedgerOps Trust Score Lookup service provides "
-            "real-time completion and dispute metrics from on-chain data.' "
-            "Need a factual verification before embedding in our audit log."
-        ),
-        notes=(
-            "LedgerOps acts as a buyer to purchase a Citeable verification. "
-            "3rd unique buyer wallet (LedgerOps SDK key). "
-            "Adds Citeable as a 2nd unique counterparty provider. "
-            "SKIPPED if CROO_SERVICE_ID_CITEABLE_VERIFY not configured."
-        ),
-        requires_config=['CROO_CITEABLE_SDK_KEY', 'CROO_SERVICE_ID_CITEABLE_VERIFY'],
     ))
 
     # ── ROUND B: Self-service operational checks ───────────────────────────────
-    # Both buyer agents run routine self-service checks on their own accounts.
-    # These are valid operational calls any agent running financial workflows
-    # would make, not artificial padding.
 
     seq.append(CallSpec(
-        call_index=4,
+        call_index=3,
         round_name='B',
         buyer_label='Orchestrator',
         counterparty_label='LedgerOps',
         service_name='balance_check',
         sdk_key_fn   = lambda: KEYS['Orchestrator'],
         service_id_fn= lambda: LEDGEROPS_SERVICES['balance'],
-        metadata_fn  = lambda: 'balance',
+        metadata_fn  = lambda: '{"command": "balance"}',
         requirements = (
-            "Current USDC balance check for Orchestrator agent wallet. "
-            "Needed before authorising next batch of service purchases."
+            '{"task": "Current USDC balance check for Orchestrator agent wallet. '
+            'Needed before authorising next batch of service purchases."}'
         ),
         notes=(
             "Orchestrator checks available USDC balance before committing to Round C purchases. "
-            "Orchestrator wallet (2nd call) → LedgerOps. Real use-case: treasury management."
+            "Orchestrator wallet (2nd call) -> LedgerOps. Treasury management."
         ),
     ))
 
     seq.append(CallSpec(
-        call_index=5,
+        call_index=4,
         round_name='B',
         buyer_label='SecondaryBuyer',
         counterparty_label='LedgerOps',
         service_name='receipt_verification',
         sdk_key_fn   = lambda: KEYS['SecondaryBuyer'],
         service_id_fn= lambda: LEDGEROPS_SERVICES['verify'],
-        metadata_fn  = lambda: 'verify',
+        metadata_fn  = lambda: '{"command": "verify"}',
         requirements = (
-            "Verify the most recent transaction receipt for SecondaryBuyer agent. "
-            "Required for internal accounting audit trail."
+            '{"task": "Verify the most recent transaction receipt for SecondaryBuyer agent. '
+            'Required for internal accounting audit trail."}'
         ),
         notes=(
             "SecondaryBuyer audits its most recent LedgerOps transaction. "
-            "SecondaryBuyer wallet (2nd call) → LedgerOps. Real use-case: receipt audit."
+            "SecondaryBuyer wallet (2nd call) -> LedgerOps. Receipt audit."
         ),
     ))
 
-    seq.append(CallSpec(
-        call_index=6,
-        round_name='B',
-        buyer_label='Orchestrator',
-        counterparty_label='Citeable',
-        service_name='citeable_factcheck',
-        sdk_key_fn   = lambda: KEYS['Orchestrator'],
-        service_id_fn= lambda: CITEABLE_SERVICES['factcheck'],
-        metadata_fn  = lambda: 'factcheck',
-        requirements = (
-            "Fact-check: 'CROO Credit Bureau trust scores are derived from "
-            "on-chain TransactionAuditLog data with no hardcoded values.' "
-            "Need independent verification before publishing this in our agent description."
-        ),
-        notes=(
-            "Orchestrator fact-checks a claim via Citeable — cross-provider purchase. "
-            "Orchestrator wallet → Citeable (adds 2nd unique counterparty for Orchestrator). "
-            "SKIPPED if CROO_SERVICE_ID_CITEABLE_FACTCHECK not configured."
-        ),
-        requires_config=['CROO_ORCHESTRATOR_SDK_KEY', 'CROO_SERVICE_ID_CITEABLE_FACTCHECK'],
-    ))
-
-    # ── ROUND C: Analytics & deep due diligence ───────────────────────────────
-    # Deeper analytical calls that round out the diversity picture.
+    # ── ROUND C: Analytics & deeper due diligence ─────────────────────────────
 
     seq.append(CallSpec(
-        call_index=7,
+        call_index=5,
         round_name='C',
         buyer_label='Orchestrator',
         counterparty_label='LedgerOps',
         service_name='analytics_report',
         sdk_key_fn   = lambda: KEYS['Orchestrator'],
         service_id_fn= lambda: LEDGEROPS_SERVICES['report'],
-        metadata_fn  = lambda: 'report',
+        metadata_fn  = lambda: '{"command": "report"}',
         requirements = (
-            "Full analytics report for Orchestrator agent: total USDC spent, "
-            "number of transactions, service breakdown. Used for quarterly budget review."
+            '{"task": "Full analytics report for Orchestrator agent: total USDC spent, '
+            'number of transactions, service breakdown. Used for quarterly budget review."}'
         ),
         notes=(
-            "Orchestrator pulls a spending analytics report. "
+            "Orchestrator pulls spending analytics. "
             "3rd distinct service purchased by Orchestrator from LedgerOps. "
-            "Real use-case: agent autonomously reviewing its own spending."
+            "Agent autonomously reviewing its own spending."
         ),
     ))
 
     seq.append(CallSpec(
-        call_index=8,
+        call_index=6,
         round_name='C',
         buyer_label='SecondaryBuyer',
         counterparty_label='LedgerOps',
         service_name='trust_score_lookup',
         sdk_key_fn   = lambda: KEYS['SecondaryBuyer'],
         service_id_fn= lambda: LEDGEROPS_SERVICES['trust'],
-        metadata_fn  = lambda: f"trust:{AGENT_IDS['LedgerOps'] or '<unknown_ledgerops>'}",
+        metadata_fn  = lambda: '{{"command": "trust", "target": "{}"}}'.format(AGENT_IDS['LedgerOps'] or '<unknown_ledgerops>'),
         requirements = (
             "Final due-diligence on LedgerOps itself before SecondaryBuyer commits "
             "to using LedgerOps as its primary bookkeeping provider. "
             "Need completion rate, dispute history, and account age."
         ),
         notes=(
-            "SecondaryBuyer does final due diligence on LedgerOps — self-referential but valid. "
-            "LedgerOps's own trust score is real data from its transaction history. "
+            "SecondaryBuyer does final due diligence on LedgerOps. "
+            "LedgerOps trust score is real data from its transaction history. "
             "3rd distinct service purchased by SecondaryBuyer from LedgerOps."
         ),
-    ))
-
-    seq.append(CallSpec(
-        call_index=9,
-        round_name='C',
-        buyer_label='SecondaryBuyer',
-        counterparty_label='Citeable',
-        service_name='citeable_verify',
-        sdk_key_fn   = lambda: KEYS['SecondaryBuyer'],
-        service_id_fn= lambda: CITEABLE_SERVICES['verify'],
-        metadata_fn  = lambda: 'verify',
-        requirements = (
-            "SecondaryBuyer verifies that LedgerOps's Trust Score methodology is sound "
-            "before relying on it for hiring decisions. Using Citeable as an independent "
-            "verification source."
-        ),
-        notes=(
-            "SecondaryBuyer diversifies to Citeable — adds SecondaryBuyer as a 3rd buyer for Citeable. "
-            "Cross-agent diversity: same buyer, different counterparty. "
-            "SKIPPED if CROO_SERVICE_ID_CITEABLE_VERIFY not configured."
-        ),
-        requires_config=['CROO_SECONDARY_BUYER_SDK_KEY', 'CROO_SERVICE_ID_CITEABLE_VERIFY'],
     ))
 
     return seq
@@ -593,11 +518,6 @@ def validate_config(calls: list[CallSpec]) -> None:
         status = '✅' if sid else '❌ MISSING'
         print(f"    {'CROO_SERVICE_ID_' + svc.upper():<35} {'…' + sid[-8:] if sid else '(not set)':12} {status}")
 
-    print()
-    print("  Citeable Service IDs (optional):")
-    for svc, sid in CITEABLE_SERVICES.items():
-        status = '✅' if sid else '⚠  not set (Citeable calls will be skipped)'
-        print(f"    {'CROO_SERVICE_ID_CITEABLE_' + svc.upper():<35} {'…' + sid[-8:] if sid else '(not set)':12} {status}")
 
     print()
     print("  Call availability:")

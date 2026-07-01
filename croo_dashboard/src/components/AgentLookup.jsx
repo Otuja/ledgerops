@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Search, ShieldCheck, AlertTriangle, AlertOctagon, Users, Clock, TrendingUp, Zap, Flag } from 'lucide-react';
-import { fetchTrustScore } from '../lib/api';
+import { fetchTrustScore, fetchTrustLookups } from '../lib/api';
+import { usePolling } from '../hooks/usePolling';
 
 // Determine badge color and label from trust score
 function TrustBadge({ score }) {
@@ -95,6 +96,8 @@ export default function AgentLookup() {
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState('');
   const [searched, setSearched] = useState(false);
+  const { data } = usePolling(fetchTrustLookups, 10000);
+  const lookups = data || [];
 
   const handleLookup = async () => {
     const trimmed = query.trim();
@@ -279,6 +282,32 @@ export default function AgentLookup() {
               No risk flags detected — clean profile.
             </div>
           )}
+        </div>
+      )}
+
+      {/* Recent Lookups (Paid on-chain) */}
+      {lookups.length > 0 && (
+        <div className="space-y-4 animate-fade-in-up mt-12 pt-8 border-t border-white/5">
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-bold text-white tracking-tight">Paid Lookups History</h3>
+            <span className="bg-brand-500/20 text-brand-400 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full">On-Chain</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {lookups.map(lookup => (
+              <div key={lookup.order_id} className="glass rounded-xl p-4 border border-white/5 hover:border-white/10 transition-colors cursor-pointer" onClick={() => { setQuery(lookup.target_agent_id); handleLookup(); }}>
+                <div className="flex justify-between items-start mb-2">
+                  <span className="font-mono text-xs text-brand-400">{lookup.target_agent_id}</span>
+                  <div className={`px-2 py-0.5 rounded text-xs font-bold ${lookup.trust_score >= 70 ? 'bg-emerald-500/20 text-emerald-400' : lookup.trust_score >= 40 ? 'bg-amber-500/20 text-amber-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                    Score: {lookup.trust_score}
+                  </div>
+                </div>
+                <div className="flex justify-between text-xs text-surface-400">
+                  <span>Order: {lookup.order_id.substring(0,8)}...</span>
+                  <span>{new Date(lookup.created_at).toLocaleString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

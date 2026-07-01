@@ -212,8 +212,15 @@ class Command(BaseCommand):
             amount_usdc = order.price or '0'
             target_agent_id = order.provider_agent_id or 'default_agent'
 
-            # Determine which service is being requested based on metadata
-            metadata_str = str(getattr(order, 'metadata', '')).lower()
+            # Order dataclass has no 'metadata' field — fetch it from the Negotiation
+            metadata_str = ''
+            if order.negotiation_id:
+                try:
+                    neg = await client.get_negotiation(order.negotiation_id)
+                    metadata_str = str(getattr(neg, 'metadata', '')).lower()
+                    logger.debug("Fetched metadata from negotiation %s: %r", order.negotiation_id, metadata_str)
+                except Exception as neg_err:
+                    logger.warning("Could not fetch negotiation %s for metadata: %s", order.negotiation_id, neg_err)
 
             if 'balance' in metadata_str:
                 # Service: Wallet Balance Retrieval
@@ -222,7 +229,8 @@ class Command(BaseCommand):
                     return wallet.balance_usdc if wallet else '0.000000'
                 
                 bal = await sync_to_async(_get_balance)()
-                deliver_text = f"WALLET BALANCE: {bal} USDC"
+                formatted_bal = float(bal) / 1000000 if bal else 0
+                deliver_text = f"WALLET BALANCE: {formatted_bal:.6f} USDC"
                 self.stdout.write(self.style.SUCCESS(f"Delivered balance check for {buyer_id}"))
 
             elif 'verify' in metadata_str:
@@ -232,7 +240,8 @@ class Command(BaseCommand):
                 
                 last_tx = await sync_to_async(_get_last_tx)()
                 if last_tx:
-                    deliver_text = f"VERIFIED. Last order {last_tx.order_id} was {last_tx.amount_usdc} USDC. Status: {last_tx.status}."
+                    formatted_amt = float(last_tx.amount_usdc) / 1000000 if last_tx.amount_usdc else 0
+                    deliver_text = f"VERIFIED. Last order {last_tx.order_id} was {formatted_amt:.6f} USDC. Status: {last_tx.status}."
                 else:
                     deliver_text = "INVALID. No verified transactions found for this agent."
                 self.stdout.write(self.style.SUCCESS(f"Delivered receipt verification for {buyer_id}"))
@@ -245,15 +254,23 @@ class Command(BaseCommand):
                     return total or 0, count
 
                 total_spent, tx_count = await sync_to_async(_get_report)()
-                deliver_text = f"ANALYTICS REPORT: Total spent = {total_spent} USDC across {tx_count} transactions."
+                formatted_total = float(total_spent) / 1000000 if total_spent else 0
+                deliver_text = f"ANALYTICS REPORT: Total spent = {formatted_total:.6f} USDC across {tx_count} transactions."
                 self.stdout.write(self.style.SUCCESS(f"Delivered analytics report for {buyer_id}"))
 
             elif 'trust' in metadata_str:
                 # Service: Trust Score Lookup
-                # Metadata format: "trust:<target_agent_id>"
-                # e.g. metadata = "trust:agent_0xabc123"
-                parts = metadata_str.split('trust:', 1)
-                target_agent_id_lookup = parts[1].strip() if len(parts) > 1 else buyer_id
+                target_agent_id_lookup = buyer_id
+                import json
+                try:
+                    meta_dict = json.loads(getattr(order, 'metadata', '{}'))
+                    if 'target' in meta_dict:
+                        target_agent_id_lookup = meta_dict['target']
+                except Exception:
+                    # Fallback to legacy string format "trust:<target>"
+                    parts = metadata_str.split('trust:', 1)
+                    if len(parts) > 1:
+                        target_agent_id_lookup = parts[1].split('"')[0].split('}')[0].strip()
 
                 def _compute_and_save(target_id, order_id_str, buyer):
                     report = compute_trust_score(target_id)

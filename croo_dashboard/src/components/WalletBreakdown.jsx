@@ -23,7 +23,7 @@ export default function WalletBreakdown({ wallets, totalBalance }) {
               <div key={wallet.agent_id} className="space-y-2">
                 <div className="flex justify-between items-end">
                   <span className="font-mono text-sm text-brand-300 font-medium">{wallet.agent_id}</span>
-                  <span className="font-mono text-sm text-white">{wallet.balance_usdc}</span>
+                  <span className="font-mono text-sm text-white">{(parseFloat(wallet.balance_usdc) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="w-full bg-surface-800 rounded-full h-1.5 overflow-hidden">
                   <div 

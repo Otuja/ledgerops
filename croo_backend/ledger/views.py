@@ -66,7 +66,7 @@ def export_taxes(request, agent_id):
             tx.order_id,
             tx.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC'),
             tx.status,
-            tx.amount_usdc,
+            f"{(tx.amount_usdc / 1000000):.6f}",
             tx.provider_agent_id,
             tx.service_id,
             tx.tx_hash,

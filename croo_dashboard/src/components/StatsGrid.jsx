@@ -3,8 +3,10 @@ import { DollarSign, Activity, FileCheck, XCircle, Wallet, Handshake } from 'luc
 
 export default function StatsGrid({ stats }) {
   const formatUSDC = (val) => {
-    const num = parseFloat(val);
-    return isNaN(num) ? '0.00' : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    let num = parseFloat(val);
+    if (isNaN(num)) return '0.00';
+    num = num / 1_000_000;
+    return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   return (

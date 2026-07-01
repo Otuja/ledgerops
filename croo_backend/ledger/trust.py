@@ -114,7 +114,7 @@ def compute_trust_score(target_agent_id: str) -> dict:
 
     # ── 3. Volume ─────────────────────────────────────────────────────────────
     total_volume_result = orders.aggregate(total=Sum('amount_usdc'))['total']
-    total_volume_usdc = float(total_volume_result or Decimal('0'))
+    total_volume_usdc = float(total_volume_result or Decimal('0')) / 1000000.0
 
     # ── 4. Buyer diversity ────────────────────────────────────────────────────
     unique_buyer_count = orders.values('buyer_id').distinct().count()
@@ -140,9 +140,10 @@ def compute_trust_score(target_agent_id: str) -> dict:
     delivered_orders = orders.exclude(delivered_at__isnull=True)
     delivery_deltas = []
     for order in delivered_orders.only('timestamp', 'delivered_at'):
-        delta_secs = (order.delivered_at - order.timestamp).total_seconds()
-        if delta_secs > 0:
-            delivery_deltas.append(delta_secs / SLA_SECONDS)
+        if order.delivered_at and order.timestamp:
+            delta_secs = (order.delivered_at - order.timestamp).total_seconds()
+            if delta_secs > 0:
+                delivery_deltas.append(delta_secs / SLA_SECONDS)
 
     if delivery_deltas:
         avg_delivery_vs_sla = sum(delivery_deltas) / len(delivery_deltas)
@@ -157,8 +158,9 @@ def compute_trust_score(target_agent_id: str) -> dict:
             .annotate(vol=Sum('amount_usdc'))
             .order_by('-vol')
         )
-        if buyer_volumes.exists():
-            top_buyer_vol = float(buyer_volumes.first()['vol'] or 0)
+        first_buyer = buyer_volumes.first()
+        if first_buyer:
+            top_buyer_vol = float(first_buyer.get('vol') or 0)
             self_trade_ratio = top_buyer_vol / total_volume_usdc
         else:
             self_trade_ratio = 0.0
@@ -193,7 +195,7 @@ def compute_trust_score(target_agent_id: str) -> dict:
         + W_DELIVERY_SPD * speed_component
     )
 
-    trust_score = int(max(0, min(100, round(raw_score * 100))))
+    trust_score = max(0, min(100, round(raw_score * 100)))
 
     # ── 10. Summary (template-based, no LLM) ─────────────────────────────────
     summary = _generate_summary(trust_score, flags, completed_orders, total_orders, unique_buyer_count)

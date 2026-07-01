@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   AreaChart,
   Area,
@@ -11,7 +11,9 @@ import {
 
 export default function RevenueChart({ logs }) {
   // Generate some realistic-looking volume data if there aren't enough logs
-  const data = logs && logs.length > 5 ? processLogs(logs) : generateMockData();
+  const data = useMemo(() => {
+    return logs && logs.length > 5 ? processLogs(logs) : generateMockData();
+  }, [JSON.stringify(logs)]);
 
   return (
     <div className="glass rounded-2xl p-6 border-t border-t-white/10 h-full flex flex-col animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
@@ -77,7 +79,7 @@ function processLogs(logs) {
   const grouped = {};
   logs.forEach(log => {
     const date = new Date(log.timestamp).toLocaleDateString('en-US', { weekday: 'short' });
-    grouped[date] = (grouped[date] || 0) + parseFloat(log.amount_usdc || 0);
+    grouped[date] = (grouped[date] || 0) + (parseFloat(log.amount_usdc || 0) / 1_000_000);
   });
   return Object.keys(grouped).map(date => ({
     date,

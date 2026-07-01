@@ -91,7 +91,9 @@ export default function TransactionTable({ logs, loading }) {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <span className="font-mono text-sm text-white font-medium">{log.amount_usdc}</span>
+                    <span className="font-mono text-sm text-white font-medium">
+                      {(parseFloat(log.amount_usdc) / 1_000_000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex justify-center">

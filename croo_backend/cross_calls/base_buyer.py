@@ -19,6 +19,7 @@ from croo import (
     NegotiationStatus,
     OrderStatus,
     APIError,
+    ListOptions,
 )
 
 logger = logging.getLogger('croo.cross_calls')
@@ -108,7 +109,7 @@ async def buy_service(
             neg = await client.get_negotiation(neg_id)
 
             if neg.status == NegotiationStatus.ACCEPTED:
-                orders = await client.list_orders()
+                orders = await client.list_orders(ListOptions(role='buyer'))
                 for o in orders:
                     if o.negotiation_id == neg_id:
                         order_id = o.order_id
@@ -192,11 +193,12 @@ async def buy_service(
         result.error_detail = msg
         return result
 
-    except Exception as ex:  # pragma: no cover
-        msg = f"Unexpected: {ex}"
-        _log(f"❌ {msg}")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         result.status = 'error'
-        result.error_detail = msg
+        result.error_detail = f"{type(e).__name__}: {str(e)}"
+        _log(f"❌ {result.error_detail}")
         return result
 
     finally:

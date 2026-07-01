@@ -31,19 +31,8 @@ function App() {
   const safeNegotiations = negotiations || [];
   const safeWallets = wallets || [];
 
-  // Fallback to dummy data for dashboard preview if API fails entirely
-  const safeStats = stats?.total_balance ? stats : {
-    total_balance: '12500.500000',
-    transaction_count: 142,
-    verified_count: 130,
-    failed_count: 12,
-    wallet_count: 3,
-    negotiation_count: 50,
-    negotiations_accepted: 45,
-    negotiations_pending: 5,
-  };
-
-  const safeLogs = logs?.length > 0 ? logs : mockLogs;
+  const safeStats = stats || {};
+  const safeLogs = logs || [];
 
   return (
     <div className="min-h-screen bg-bg text-text flex selection:bg-brand-500/30 selection:text-brand-200">
