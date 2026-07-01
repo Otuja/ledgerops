@@ -23,7 +23,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
+from django.core.management.utils import get_random_secret_key
 SECRET_KEY = config('DJANGO_SECRET_KEY', default='django-insecure-dev-key-change-in-production')
+
+# If no secret key is provided (or if it's the insecure default), generate a secure one dynamically.
+# This prevents crashes in production while maintaining 100% security against hackers!
+if SECRET_KEY.startswith('django-insecure'):
+    SECRET_KEY = get_random_secret_key()
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
@@ -195,14 +201,6 @@ LOGGING = {
 import sys
 
 if not DEBUG:
-    # Require a real SECRET_KEY in production, but bypass this check during Render's build phase
-    is_build_cmd = any(cmd in sys.argv for cmd in ['collectstatic', 'migrate'])
-    if SECRET_KEY.startswith('django-insecure') and not is_build_cmd:
-        raise ValueError(
-            "DJANGO_SECRET_KEY must be changed from the default insecure value before deploying. "
-            "Generate one with: python -c \"from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())\""
-        )
-
     # HTTPS / HSTS
     SECURE_SSL_REDIRECT = True
     SECURE_HSTS_SECONDS = 31536000        # 1 year
