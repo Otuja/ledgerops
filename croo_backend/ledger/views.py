@@ -159,7 +159,7 @@ def dashboard_stats(request):
 # Health Check
 # ---------------------------------------------------------------------------
 
-@api_view(['GET'])
+@api_view(['GET', 'HEAD'])
 def health_check(request):
     """Simple health-check for uptime monitoring."""
     return Response({'status': 'ok'}, status=status.HTTP_200_OK)
