@@ -64,11 +64,8 @@ MIDDLEWARE = [
 ]
 
 # CORS - Allow the React frontend to talk to the Django API
-CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:5173,http://127.0.0.1:5173',
-    cast=lambda v: [s.strip() for s in v.split(',')]
-)
+# We allow all origins so that any Vercel domain (or localhost) can connect without being blocked.
+CORS_ALLOW_ALL_ORIGINS = True
 
 ROOT_URLCONF = 'croo_backend.urls'
 
