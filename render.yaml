@@ -9,7 +9,7 @@ services:
     name: ledgerops-api
     env: python
     buildCommand: "pip install -r croo_backend/requirements.txt && cd croo_backend && python manage.py collectstatic --no-input && python manage.py migrate"
-    startCommand: "cd croo_backend && python manage.py run_agent & gunicorn --bind 0.0.0.0:$PORT --chdir croo_backend croo_backend.wsgi:application"
+    startCommand: "cd croo_backend && (while true; do timeout 7200 python manage.py run_agent; sleep 5; done) & gunicorn --bind 0.0.0.0:$PORT --chdir croo_backend croo_backend.wsgi:application"
     plan: free
     envVars:
       - key: DATABASE_URL
