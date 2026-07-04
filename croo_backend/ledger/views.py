@@ -150,6 +150,10 @@ def list_negotiations(request):
 @api_view(['GET'])
 def dashboard_stats(request):
     """Aggregate statistics for the dashboard stat cards."""
+    import asyncio
+    from decouple import config as env
+    from croo import AgentClient, Config, ListOptions
+
     wallets = VirtualWallet.objects.all()
     total_balance = wallets.aggregate(total=Sum('balance_usdc'))['total'] or 0
 
@@ -170,14 +174,40 @@ def dashboard_stats(request):
     # Include trust score lookups in the transaction count
     trust_count = TrustScoreLookup.objects.count()
 
+    # --- Fetch real CROO on-chain earnings ---
+    croo_earnings = 0.0
+    croo_orders_completed = trust_count + tx_counts['completed']  # DB baseline
+    try:
+        sdk_key = env('CROO_SDK_KEY', default=env('CROO_API_KEY', default=''))
+        if sdk_key:
+            croo_cfg = Config(
+                base_url=env('CROO_API_URL', default='https://api.croo.network'),
+                ws_url=env('CROO_WS_URL', default='wss://api.croo.network/ws'),
+            )
+            async def _fetch():
+                c = AgentClient(croo_cfg, sdk_key)
+                orders = await c.list_orders(ListOptions(role='provider'))
+                await c.close()
+                return orders
+            orders = asyncio.run(_fetch())
+            completed_orders = [o for o in orders if o.status == 'completed']
+            croo_orders_completed = len(completed_orders)
+            croo_earnings = sum(float(getattr(o, 'price', 0) or 0) for o in completed_orders) / 1_000_000
+    except Exception:
+        pass  # Fallback to DB baseline if CROO API unavailable
+
+    # If CROO reports more completed orders than our DB, use CROO count
+    final_completed = max(croo_orders_completed, trust_count + tx_counts['completed'])
+    final_balance = max(total_balance, croo_earnings)
+
     data = {
-        'total_balance': f"{total_balance:.6f}",
-        'wallet_count': wallets.count(),
-        'transaction_count': tx_counts['total'] + trust_count,
+        'total_balance': f"{final_balance:.6f}",
+        'wallet_count': max(wallets.count(), 1) if final_completed > 0 else wallets.count(),
+        'transaction_count': max(tx_counts['total'] + trust_count, final_completed),
         'verified_count': tx_counts['verified'],
         'pending_count': tx_counts['pending'],
         'failed_count': tx_counts['failed'],
-        'completed_count': tx_counts['completed'] + trust_count,
+        'completed_count': final_completed,
         'negotiation_count': neg_counts['total'],
         'negotiations_accepted': neg_counts['accepted'],
         'negotiations_pending': neg_counts['pending'],

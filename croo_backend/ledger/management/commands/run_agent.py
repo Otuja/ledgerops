@@ -260,28 +260,39 @@ class Command(BaseCommand):
 
             elif 'trust' in metadata_str:
                 # Service: Trust Score Lookup
-                target_agent_id_lookup = buyer_id
+                # metadata_str comes from the negotiation — parse JSON target from it
+                target_agent_id_lookup = buyer_id  # safe default
                 import json
                 try:
-                    meta_dict = json.loads(getattr(order, 'metadata', '{}'))
-                    if 'target' in meta_dict:
-                        target_agent_id_lookup = meta_dict['target']
-                except Exception:
-                    # Fallback to legacy string format "trust:<target>"
-                    parts = metadata_str.split('trust:', 1)
+                    # metadata_str is lowercased, so load from the raw negotiation metadata
+                    if order.negotiation_id:
+                        neg_raw = await client.get_negotiation(order.negotiation_id)
+                        raw_metadata = str(getattr(neg_raw, 'metadata', '') or '{}')
+                        meta_dict = json.loads(raw_metadata)
+                        if 'target' in meta_dict:
+                            target_agent_id_lookup = meta_dict['target']
+                except Exception as me:
+                    logger.warning("Could not parse trust target from metadata: %s", me)
+                    # Final fallback: try extracting from lowercased metadata_str
+                    parts = metadata_str.split('target', 1)
                     if len(parts) > 1:
-                        target_agent_id_lookup = parts[1].split('"')[0].split('}')[0].strip()
+                        # grab the UUID-like value after 'target': '
+                        candidate = parts[1].strip().lstrip(':').strip().strip('"').strip("'").split('"')[0].split("'")[0].split('}')[0].strip()
+                        if candidate and len(candidate) > 8:
+                            target_agent_id_lookup = candidate
 
                 def _compute_and_save(target_id, order_id_str, buyer):
                     report = compute_trust_score(target_id)
                     report['order_id'] = order_id_str
                     import json
-                    TrustScoreLookup.objects.create(
+                    TrustScoreLookup.objects.update_or_create(
                         order_id=order_id_str,
-                        target_agent_id=target_id,
-                        requesting_buyer_id=buyer,
-                        trust_score=report['trust_score'],
-                        result_json=json.dumps(report, default=str),
+                        defaults=dict(
+                            target_agent_id=target_id,
+                            requesting_buyer_id=buyer,
+                            trust_score=report['trust_score'],
+                            result_json=json.dumps(report, default=str),
+                        ),
                     )
                     return report
 
