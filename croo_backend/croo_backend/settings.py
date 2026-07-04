@@ -11,12 +11,20 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
-from decouple import config
+from decouple import config, Config as DecoupleConfig, RepositoryEnv
 import dj_database_url
 import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Explicitly load .env so local runserver gets DATABASE_URL too
+_env_file = BASE_DIR / '.env'
+if _env_file.exists():
+    _env_config = DecoupleConfig(RepositoryEnv(str(_env_file)))
+    _database_url = _env_config('DATABASE_URL', default='')
+else:
+    _database_url = os.environ.get('DATABASE_URL', '')
 
 
 # Quick-start development settings - unsuitable for production
@@ -92,7 +100,7 @@ WSGI_APPLICATION = 'croo_backend.wsgi.application'
 
 DATABASES = {
     'default': dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        default=_database_url or f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
         conn_max_age=600,
         ssl_require=not DEBUG
     )
@@ -106,8 +114,7 @@ REST_FRAMEWORK = {
     ] + (
         ['rest_framework.renderers.BrowsableAPIRenderer'] if config('DEBUG', default=True, cast=bool) else []
     ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 50,
+    # No pagination — frontend expects plain arrays, not {count, results} objects
 }
 
 

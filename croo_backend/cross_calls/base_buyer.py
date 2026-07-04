@@ -136,6 +136,22 @@ async def buy_service(
             result.error_detail = msg
             return result
 
+        # ── Step 2.5: Wait for order to be created ────────────────────────────
+        while time.monotonic() < deadline:
+            try:
+                check_order = await client.get_order(order_id)
+                if check_order.status == OrderStatus.CREATED:
+                    break
+                elif check_order.status in (OrderStatus.REJECTED, OrderStatus.EXPIRED):
+                    msg = f"Order failed during creation: {check_order.status}"
+                    _log(f"❌ {msg}")
+                    result.status = 'error'
+                    result.error_detail = msg
+                    return result
+            except APIError:
+                pass
+            await asyncio.sleep(POLL_INTERVAL)
+
         # ── Step 3: Pay ───────────────────────────────────────────────────────
         try:
             pay_result = await client.pay_order(order_id)

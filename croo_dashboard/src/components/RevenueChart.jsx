@@ -12,7 +12,7 @@ import {
 export default function RevenueChart({ logs }) {
   // Generate some realistic-looking volume data if there aren't enough logs
   const data = useMemo(() => {
-    return logs && logs.length > 5 ? processLogs(logs) : generateMockData();
+    return logs && logs.length > 0 ? processLogs(logs) : generateMockData();
   }, [JSON.stringify(logs)]);
 
   return (

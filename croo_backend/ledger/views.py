@@ -21,15 +21,43 @@ from .serializers import (
 
 @api_view(['GET'])
 def list_logs(request):
-    """Return all transaction audit logs, optionally filtered by status."""
-    qs = TransactionAuditLog.objects.all()
-
+    """Return all activity — transaction audit logs merged with trust score lookups."""
+    import json
     status_filter = request.query_params.get('status')
+
+    # Regular transaction logs
+    qs = TransactionAuditLog.objects.all()
     if status_filter:
         qs = qs.filter(status=status_filter)
+    tx_data = TransactionAuditLogSerializer(qs, many=True).data
 
-    serializer = TransactionAuditLogSerializer(qs, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+    # Trust score lookups — map to the same shape so the frontend table works
+    if not status_filter or status_filter in ('completed', 'verified'):
+        trust_lookups = TrustScoreLookup.objects.all()
+        trust_rows = []
+        for t in trust_lookups:
+            trust_rows.append({
+                'order_id': t.order_id or str(t.call_id),
+                'negotiation_id': '',
+                'service_id': 'trust_score_lookup',
+                'buyer_id': t.requesting_buyer_id or 'unknown',
+                'agent_id': t.target_agent_id,
+                'provider_agent_id': '',
+                'amount_usdc': '0.000000',
+                'tx_hash': '',
+                'status': 'completed',
+                'timestamp': t.created_at,
+                'delivered_at': t.created_at,
+                'trust_score': t.trust_score,
+            })
+    else:
+        trust_rows = []
+
+    # Merge and sort by timestamp descending
+    combined = list(tx_data) + trust_rows
+    combined.sort(key=lambda x: str(x.get('timestamp', '')), reverse=True)
+
+    return Response(combined, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])
@@ -139,14 +167,17 @@ def dashboard_stats(request):
         pending=Count('id', filter=Q(status='pending')),
     )
 
+    # Include trust score lookups in the transaction count
+    trust_count = TrustScoreLookup.objects.count()
+
     data = {
         'total_balance': f"{total_balance:.6f}",
         'wallet_count': wallets.count(),
-        'transaction_count': tx_counts['total'],
+        'transaction_count': tx_counts['total'] + trust_count,
         'verified_count': tx_counts['verified'],
         'pending_count': tx_counts['pending'],
         'failed_count': tx_counts['failed'],
-        'completed_count': tx_counts['completed'],
+        'completed_count': tx_counts['completed'] + trust_count,
         'negotiation_count': neg_counts['total'],
         'negotiations_accepted': neg_counts['accepted'],
         'negotiations_pending': neg_counts['pending'],

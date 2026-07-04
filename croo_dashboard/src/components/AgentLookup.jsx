@@ -294,7 +294,7 @@ export default function AgentLookup() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {lookups.map(lookup => (
-              <div key={lookup.order_id} className="glass rounded-xl p-4 border border-white/5 hover:border-white/10 transition-colors cursor-pointer" onClick={() => { setQuery(lookup.target_agent_id); handleLookup(); }}>
+              <div key={lookup.call_id || lookup.order_id} className="glass rounded-xl p-4 border border-white/5 hover:border-white/10 transition-colors cursor-pointer" onClick={() => { setQuery(lookup.target_agent_id); setTimeout(() => { setLoading(true); setError(''); setReport(null); setSearched(true); fetchTrustScore(lookup.target_agent_id).then(setReport).catch(() => setError('Failed to fetch trust report.')).finally(() => setLoading(false)); }, 0); }}>
                 <div className="flex justify-between items-start mb-2">
                   <span className="font-mono text-xs text-brand-400">{lookup.target_agent_id}</span>
                   <div className={`px-2 py-0.5 rounded text-xs font-bold ${lookup.trust_score >= 70 ? 'bg-emerald-500/20 text-emerald-400' : lookup.trust_score >= 40 ? 'bg-amber-500/20 text-amber-400' : 'bg-rose-500/20 text-rose-400'}`}>

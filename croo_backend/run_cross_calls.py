@@ -362,9 +362,9 @@ def build_sequence() -> list[CallSpec]:
         service_id_fn= lambda: LEDGEROPS_SERVICES['trust'],
         metadata_fn  = lambda: '{{"command": "trust", "target": "{}"}}'.format(AGENT_IDS['LedgerOps'] or '<unknown_ledgerops>'),
         requirements = (
-            "Final due-diligence on LedgerOps itself before SecondaryBuyer commits "
-            "to using LedgerOps as its primary bookkeeping provider. "
-            "Need completion rate, dispute history, and account age."
+            '{"task": "Final due-diligence on LedgerOps itself before SecondaryBuyer commits '
+            'to using LedgerOps as its primary bookkeeping provider. '
+            'Need completion rate, dispute history, and account age."}'
         ),
         notes=(
             "SecondaryBuyer does final due diligence on LedgerOps. "

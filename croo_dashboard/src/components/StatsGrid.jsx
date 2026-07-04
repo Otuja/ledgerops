@@ -5,7 +5,7 @@ export default function StatsGrid({ stats }) {
   const formatUSDC = (val) => {
     let num = parseFloat(val);
     if (isNaN(num)) return '0.00';
-    num = num / 1_000_000;
+    // total_balance is stored in plain USDC (e.g. 400000.000000), not micro-units
     return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
@@ -34,8 +34,8 @@ export default function StatsGrid({ stats }) {
         </div>
         <h2 className="text-3xl font-bold text-white mb-2">{stats.transaction_count}</h2>
         <div className="flex items-center gap-3 text-xs font-medium">
-          <span className="text-accent-400 bg-accent-400/10 px-2 py-1 rounded-md">{stats.verified_count} verified</span>
-          <span className="text-rose-400 bg-rose-400/10 px-2 py-1 rounded-md">{stats.failed_count} failed</span>
+          <span className="text-accent-400 bg-accent-400/10 px-2 py-1 rounded-md">{(stats.verified_count || 0) + (stats.completed_count || 0)} ok</span>
+          <span className="text-rose-400 bg-rose-400/10 px-2 py-1 rounded-md">{stats.failed_count || 0} failed</span>
         </div>
       </div>
 
