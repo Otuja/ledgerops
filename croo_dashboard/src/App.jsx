@@ -8,6 +8,9 @@ import HealthBadge from './components/HealthBadge';
 import ServicesPanel from './components/ServicesPanel';
 import RevenueChart from './components/RevenueChart';
 import AgentLookup from './components/AgentLookup';
+import TaxExports from './components/TaxExports';
+import Analytics from './components/Analytics';
+import ReceiptVerification from './components/ReceiptVerification';
 
 import { fetchStats, fetchLogs, fetchWallets, fetchNegotiations } from './lib/api';
 import { usePolling } from './hooks/usePolling';
@@ -112,6 +115,18 @@ function App() {
 
             {currentView === 'lookup' && (
               <AgentLookup />
+            )}
+            
+            {currentView === 'tax-exports' && (
+              <TaxExports />
+            )}
+            
+            {currentView === 'analytics' && (
+              <Analytics />
+            )}
+            
+            {currentView === 'receipts' && (
+              <ReceiptVerification />
             )}
 
           </div>

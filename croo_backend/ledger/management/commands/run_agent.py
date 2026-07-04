@@ -209,7 +209,8 @@ class Command(BaseCommand):
 
             # Extract fields from the dataclass (NOT a dict)
             buyer_id = order.buyer_user_id or order.requester_agent_id or 'unknown'
-            amount_usdc = order.price or '0'
+            raw_amount = float(getattr(order, 'fee_amount', 0) or getattr(order, 'price', 0) or 0)
+            amount_usdc = str(raw_amount / 1000000) if raw_amount else '0'
             target_agent_id = order.provider_agent_id or 'default_agent'
 
             # Order dataclass has no 'metadata' field — fetch it from the Negotiation

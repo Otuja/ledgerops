@@ -77,7 +77,8 @@ class Command(BaseCommand):
             service_id = getattr(order, 'service_id', '') or ''
             buyer_id = (getattr(order, 'requester_agent_id', '') or
                         getattr(order, 'buyer_user_id', '') or 'unknown')
-            price = getattr(order, 'price', 0) or 0
+            raw_amount = float(getattr(order, 'fee_amount', 0) or getattr(order, 'price', 0) or 0)
+            price = str(raw_amount / 1000000) if raw_amount else '0'
             negotiation_id = getattr(order, 'negotiation_id', '') or ''
 
             # Determine service type by service_id

@@ -1,11 +1,13 @@
 import React from 'react';
-import { LayoutDashboard, Zap, FileText, Handshake, Briefcase, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Zap, FileText, Handshake, Briefcase, ShieldCheck, Activity, Search } from 'lucide-react';
 
 export default function Sidebar({ currentView, setCurrentView, isOpen, setIsOpen }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'services', label: 'Services', icon: Zap },
     { id: 'lookup', label: 'Agent Lookup', icon: ShieldCheck },
+    { id: 'tax-exports', label: 'Tax Exports', icon: FileText },
+    { id: 'analytics', label: 'Analytics', icon: Activity },
+    { id: 'receipts', label: 'Receipt Verify', icon: Search },
     { id: 'transactions', label: 'Transactions', icon: FileText },
     { id: 'negotiations', label: 'Negotiations', icon: Handshake },
     { id: 'wallets', label: 'Wallets', icon: Briefcase },

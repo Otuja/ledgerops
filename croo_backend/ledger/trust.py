@@ -98,7 +98,7 @@ def compute_trust_score(target_agent_id: str) -> dict:
         }
 
     # ── 2. Core counts ────────────────────────────────────────────────────────
-    completed_orders = orders.filter(status='completed').count()
+    completed_orders = orders.filter(status__in=['completed', 'verified']).count()
     disputed_orders = orders.filter(
         Q(is_disputed=True) | Q(status='failed') | Q(status='rejected')
     ).count()
