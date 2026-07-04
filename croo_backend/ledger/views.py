@@ -186,14 +186,30 @@ def dashboard_stats(request):
             )
             async def _fetch():
                 c = AgentClient(croo_cfg, sdk_key)
-                orders = await c.list_orders(ListOptions(role='provider'))
+                all_orders = []
+                page = 1
+                while True:
+                    opts = ListOptions(role='provider', page=page, page_size=100)
+                    res = await c.list_orders(opts)
+                    items = getattr(res, 'data', None)
+                    if items is None:
+                        items = getattr(res, 'items', res)
+                        if not isinstance(items, list):
+                            items = getattr(items, 'data', [])
+                    all_orders.extend(items)
+                    if len(items) < 100:
+                        break
+                    page += 1
                 await c.close()
-                return orders
+                return all_orders
             orders = asyncio.run(_fetch())
             completed_orders = [o for o in orders if o.status == 'completed']
             croo_orders_completed = len(completed_orders)
-            croo_earnings = sum(float(getattr(o, 'price', 0) or 0) for o in completed_orders) / 1_000_000
-    except Exception:
+            
+            # Use fee_amount to calculate actual on-chain volume transferred
+            croo_earnings = sum(float(getattr(o, 'fee_amount', 0) or getattr(o, 'price', 0) or 0) for o in completed_orders) / 1_000_000
+    except Exception as e:
+        print("Error fetching CROO stats:", e)
         pass  # Fallback to DB baseline if CROO API unavailable
 
     # If CROO reports more completed orders than our DB, use CROO count

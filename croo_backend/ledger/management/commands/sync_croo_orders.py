@@ -48,9 +48,24 @@ class Command(BaseCommand):
         sdk_key = config('CROO_SDK_KEY', default=config('CROO_API_KEY', default=''))
         client = AgentClient(croo_config, sdk_key)
 
-        # Fetch all provider orders from CROO
-        orders = await client.list_orders(ListOptions(role='provider'))
-        completed = [o for o in orders if o.status == 'completed']
+        # Fetch all provider orders from CROO with pagination
+        orders = []
+        page = 1
+        while True:
+            from croo import ListOptions
+            opts = ListOptions(role='provider', page=page, page_size=100)
+            res = await client.list_orders(opts)
+            items = getattr(res, 'data', None)
+            if items is None:
+                items = getattr(res, 'items', res)
+                if not isinstance(items, list):
+                    items = getattr(items, 'data', [])
+            orders.extend(items)
+            if len(items) < 100:
+                break
+            page += 1
+            
+        completed = [o for o in orders if getattr(o, 'status', '') == 'completed']
         self.stdout.write(f'CROO: {len(orders)} total orders, {len(completed)} completed')
 
         synced = 0
