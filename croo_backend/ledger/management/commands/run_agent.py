@@ -132,6 +132,27 @@ class Command(BaseCommand):
         self.stdout.write(f"Received NEGOTIATION_CREATED: {e.negotiation_id}")
 
         try:
+            # First, fetch the negotiation to validate metadata BEFORE accepting
+            neg = await client.get_negotiation(e.negotiation_id)
+            metadata_str = str(getattr(neg, 'metadata', '')).lower()
+            valid_keywords = ['trust', 'balance', 'verify', 'report', 'export', 'log']
+            
+            if not any(kw in metadata_str for kw in valid_keywords):
+                # Reject the negotiation instantly so the buyer isn't charged
+                reason = "Invalid metadata format. Must contain a valid service keyword."
+                await client.reject_negotiation(e.negotiation_id, reason)
+                self.stdout.write(self.style.WARNING(f"Rejected negotiation {e.negotiation_id}: {reason}"))
+                await sync_to_async(NegotiationLog.objects.update_or_create)(
+                    negotiation_id=e.negotiation_id,
+                    defaults={
+                        'service_id': e.service_id,
+                        'requester_agent_id': e.requester_agent_id,
+                        'provider_agent_id': e.provider_agent_id,
+                        'status': 'rejected',
+                    },
+                )
+                return
+
             result = await client.accept_negotiation(e.negotiation_id)
             logger.info(
                 "Negotiation accepted: negotiation_id=%s  order_id=%s",
@@ -334,8 +355,8 @@ class Command(BaseCommand):
                 deliver_text = f"TAX EXPORT READY. Download your CSV here: {download_link}"
                 self.stdout.write(self.style.SUCCESS(f"Delivered tax export link for {buyer_id}"))
 
-            else:
-                # Default Service: Automated Transaction Logging
+            elif 'log' in metadata_str:
+                # Service: Automated Transaction Logging
                 verify_func = sync_to_async(verify_and_log_payment)
                 audit_log = await verify_func(
                     order_id=e.order_id,
@@ -351,6 +372,11 @@ class Command(BaseCommand):
                     f"Ledger verified for order {e.order_id} — {amount_usdc} USDC"
                 ))
                 deliver_text = "TRANSACTION_LOGGED_SUCCESSFULLY"
+
+            else:
+                # This should be impossible since we rejected invalid metadata earlier,
+                # but if it happens, return an error text instead of charging them for a log.
+                deliver_text = "ERROR: UNKNOWN SERVICE REQUESTED"
 
             # Deliver the order on-chain
             deliver_req = DeliverOrderRequest(
