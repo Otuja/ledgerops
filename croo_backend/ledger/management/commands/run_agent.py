@@ -132,26 +132,10 @@ class Command(BaseCommand):
         self.stdout.write(f"Received NEGOTIATION_CREATED: {e.negotiation_id}")
 
         try:
-            # First, fetch the negotiation to validate metadata BEFORE accepting
-            neg = await client.get_negotiation(e.negotiation_id)
-            metadata_str = str(getattr(neg, 'metadata', '')).lower()
-            valid_keywords = ['trust', 'balance', 'verify', 'report', 'export', 'log']
-            
-            if not any(kw in metadata_str for kw in valid_keywords):
-                # Reject the negotiation instantly so the buyer isn't charged
-                reason = "Invalid metadata format. Must contain a valid service keyword."
-                await client.reject_negotiation(e.negotiation_id, reason)
-                self.stdout.write(self.style.WARNING(f"Rejected negotiation {e.negotiation_id}: {reason}"))
-                await sync_to_async(NegotiationLog.objects.update_or_create)(
-                    negotiation_id=e.negotiation_id,
-                    defaults={
-                        'service_id': e.service_id,
-                        'requester_agent_id': e.requester_agent_id,
-                        'provider_agent_id': e.provider_agent_id,
-                        'status': 'rejected',
-                    },
-                )
-                return
+            # We must accept all negotiations because the official CROO dashboard
+            # may send empty metadata initially and attach requirements later.
+            # Security checks will happen after the order is created/paid.
+
 
             result = await client.accept_negotiation(e.negotiation_id)
             logger.info(
@@ -234,17 +218,31 @@ class Command(BaseCommand):
             amount_usdc = str(raw_amount / 1000000) if raw_amount else '0'
             target_agent_id = order.provider_agent_id or 'default_agent'
 
-            # Order dataclass has no 'metadata' field — fetch it from the Negotiation
+            # Fetch metadata and requirements from the negotiation
             metadata_str = ''
+            reqs_str = ''
             if order.negotiation_id:
                 try:
                     neg = await client.get_negotiation(order.negotiation_id)
                     metadata_str = str(getattr(neg, 'metadata', '')).lower()
-                    logger.debug("Fetched metadata from negotiation %s: %r", order.negotiation_id, metadata_str)
+                    reqs_str = str(getattr(neg, 'requirements', '')).lower()
+                    logger.debug("Fetched metadata: %r, requirements: %r", metadata_str, reqs_str)
                 except Exception as neg_err:
-                    logger.warning("Could not fetch negotiation %s for metadata: %s", order.negotiation_id, neg_err)
+                    logger.warning("Could not fetch negotiation %s: %s", order.negotiation_id, neg_err)
 
-            if 'balance' in metadata_str:
+            # Combine them to search for the user's instructions regardless of where the dashboard put them
+            combined_instructions = metadata_str + " " + reqs_str
+
+            # Verify that the instructions contain a valid service keyword
+            valid_keywords = ['trust', 'balance', 'verify', 'report', 'export', 'log']
+            if not any(kw in combined_instructions for kw in valid_keywords):
+                # User did not provide valid instructions! Reject the order to automatically REFUND them!
+                reason = "Invalid instructions. Must contain a valid service keyword (trust, export, report, verify, log). Refunding payment."
+                await client.reject_order(e.order_id, reason)
+                self.stdout.write(self.style.WARNING(f"Rejected and refunded order {e.order_id}: {reason}"))
+                return
+
+            if 'balance' in combined_instructions:
                 # Service: Wallet Balance Retrieval
                 def _get_balance():
                     wallet = VirtualWallet.objects.filter(agent_id=buyer_id).first()
@@ -255,7 +253,7 @@ class Command(BaseCommand):
                 deliver_text = f"WALLET BALANCE: {formatted_bal:.6f} USDC"
                 self.stdout.write(self.style.SUCCESS(f"Delivered balance check for {buyer_id}"))
 
-            elif 'verify' in metadata_str:
+            elif 'verify' in combined_instructions:
                 # Service: Receipt Verification
                 def _get_last_tx():
                     return TransactionAuditLog.objects.filter(buyer_id=buyer_id).first()
@@ -268,7 +266,7 @@ class Command(BaseCommand):
                     deliver_text = "INVALID. No verified transactions found for this agent."
                 self.stdout.write(self.style.SUCCESS(f"Delivered receipt verification for {buyer_id}"))
 
-            elif 'report' in metadata_str:
+            elif 'report' in combined_instructions:
                 # Service: Transaction Summary Report
                 def _get_report():
                     total = TransactionAuditLog.objects.filter(buyer_id=buyer_id).aggregate(Sum('amount_usdc'))['amount_usdc__sum']
@@ -280,37 +278,37 @@ class Command(BaseCommand):
                 deliver_text = f"ANALYTICS REPORT: Total spent = {formatted_total:.6f} USDC across {tx_count} transactions."
                 self.stdout.write(self.style.SUCCESS(f"Delivered analytics report for {buyer_id}"))
 
-            elif 'trust' in metadata_str:
+            elif 'trust' in combined_instructions:
                 # Service: Trust Score Lookup
-                # metadata_str comes from the negotiation — parse JSON target from it
                 target_agent_id_lookup = buyer_id  # safe default
                 import json
                 
                 if order.negotiation_id:
                     try:
-                        # metadata_str is lowercased, so load from the raw negotiation metadata
                         neg_raw = await client.get_negotiation(order.negotiation_id)
-                        raw_metadata = str(getattr(neg_raw, 'metadata', '') or '{}')
-                        meta_dict = json.loads(raw_metadata)
+                        # We try to extract JSON from both metadata and requirements
+                        raw_meta = str(getattr(neg_raw, 'metadata', '') or '{}')
+                        raw_reqs = str(getattr(neg_raw, 'requirements', '') or '{}')
                         
-                        # 1. Handle official CROO dashboard's nested "text" wrapper
-                        if 'text' in meta_dict and isinstance(meta_dict['text'], str):
-                            try:
-                                inner_meta = json.loads(meta_dict['text'])
-                                if 'target' in inner_meta:
-                                    target_agent_id_lookup = inner_meta['target']
-                            except Exception:
-                                pass # Inner string isn't JSON, rely on fallback
-                                
-                        # 2. Handle pure un-nested JSON (like from our React UI)
-                        if target_agent_id_lookup == buyer_id and 'target' in meta_dict:
-                            target_agent_id_lookup = meta_dict['target']
+                        for raw_json in [raw_meta, raw_reqs]:
+                            meta_dict = json.loads(raw_json)
+                            # Handle official CROO dashboard's nested "text" wrapper
+                            if 'text' in meta_dict and isinstance(meta_dict['text'], str):
+                                try:
+                                    inner_meta = json.loads(meta_dict['text'])
+                                    if 'target' in inner_meta:
+                                        target_agent_id_lookup = inner_meta['target']
+                                except Exception:
+                                    pass
+                            # Handle pure un-nested JSON
+                            if target_agent_id_lookup == buyer_id and 'target' in meta_dict:
+                                target_agent_id_lookup = meta_dict['target']
                     except Exception as me:
-                        logger.warning("Could not parse trust target from JSON metadata: %s", me)
+                        pass
                         
-                # 3. Final fallback: try extracting directly from lowercased metadata_str
+                # Final fallback: try extracting directly from combined_instructions
                 if target_agent_id_lookup == buyer_id:
-                    parts = metadata_str.split('target', 1)
+                    parts = combined_instructions.split('target', 1)
                     if len(parts) > 1:
                         # grab the UUID-like value after 'target': '
                         candidate = parts[1].strip().lstrip(':').strip().strip('"').strip("'").split('"')[0].split("'")[0].split('}')[0].strip()
@@ -360,7 +358,7 @@ class Command(BaseCommand):
                     f"(score={report['trust_score']}) to {buyer_id}"
                 ))
 
-            elif 'export' in metadata_str:
+            elif 'export' in combined_instructions:
                 # Service: Tax CSV Export
                 domain = config('ALLOWED_HOSTS').split(',')[0] if config('ALLOWED_HOSTS') else '127.0.0.1'
                 protocol = "http" if domain in ['localhost', '127.0.0.1'] else "https"
@@ -369,7 +367,7 @@ class Command(BaseCommand):
                 deliver_text = f"TAX EXPORT READY. Download your CSV here: {download_link}"
                 self.stdout.write(self.style.SUCCESS(f"Delivered tax export link for {buyer_id}"))
 
-            elif 'log' in metadata_str:
+            elif 'log' in combined_instructions:
                 # Service: Automated Transaction Logging
                 verify_func = sync_to_async(verify_and_log_payment)
                 audit_log = await verify_func(
