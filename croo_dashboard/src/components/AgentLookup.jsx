@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck, AlertTriangle, AlertOctagon, Users, Clock, TrendingUp, Zap, Flag } from 'lucide-react';
-import { fetchTrustScore, fetchTrustLookups } from '../lib/api';
+import { Search, ShieldCheck, AlertTriangle, AlertOctagon, Users, Clock, TrendingUp, Zap, Flag, CreditCard } from 'lucide-react';
+import { fetchTrustScore, executeService } from '../lib/api';
 import { usePolling } from '../hooks/usePolling';
 
 // Determine badge color and label from trust score
@@ -94,9 +94,10 @@ export default function AgentLookup() {
   const [query, setQuery]   = useState('');
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
   const [error, setError]   = useState('');
   const [searched, setSearched] = useState(false);
-  const { data } = usePolling(fetchTrustLookups, 10000);
+  const { data } = usePolling(fetchTrustScore, 10000);
   const lookups = data || [];
 
   const handleLookup = async () => {
@@ -113,6 +114,25 @@ export default function AgentLookup() {
       setError('Failed to fetch trust report. Make sure the API is running.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePurchase = async () => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    setPurchasing(true);
+    setError('');
+    setSearched(true);
+    try {
+      const data = await executeService('trust', trimmed);
+      if (data) {
+        const localData = await fetchTrustScore(trimmed);
+        setReport(localData);
+      }
+    } catch (err) {
+      setError('Failed to purchase trust report on-chain.');
+    } finally {
+      setPurchasing(false);
     }
   };
 
@@ -154,19 +174,32 @@ export default function AgentLookup() {
           <button
             id="agent-lookup-btn"
             onClick={handleLookup}
-            disabled={loading || !query.trim()}
+            disabled={loading || purchasing || !query.trim()}
             className="px-6 py-3 bg-brand-500 hover:bg-brand-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-200 text-sm whitespace-nowrap flex items-center gap-2"
           >
             {loading ? (
               <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Analysing…</>
             ) : (
-              <><Search size={15} /> Look Up</>
+              <><Search size={15} /> Local Look Up</>
             )}
           </button>
         </div>
-        <p className="text-xs text-surface-500 mt-2">
-          0.05 USDC per on-chain lookup via CAP · Direct API lookups are free from this dashboard
-        </p>
+        <div className="flex items-center gap-4 mt-4">
+          <button
+            onClick={handlePurchase}
+            disabled={loading || purchasing || !query.trim()}
+            className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-400 hover:to-purple-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all duration-200 text-sm flex items-center gap-2 shadow-[0_0_15px_rgba(139,92,246,0.3)] hover:shadow-[0_0_25px_rgba(139,92,246,0.5)] border border-white/10"
+          >
+            {purchasing ? (
+              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Executing on Base...</>
+            ) : (
+              <><CreditCard size={15} /> Purchase On-Chain ($0.20)</>
+            )}
+          </button>
+          <p className="text-xs text-surface-500">
+            Click 'Purchase' to seamlessly execute the transaction on Base via the Python SDK, bypassing MetaMask entirely.
+          </p>
+        </div>
       </div>
 
       {/* Error state */}

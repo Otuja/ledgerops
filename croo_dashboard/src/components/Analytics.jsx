@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart, Activity, PieChart as PieChartIcon } from 'lucide-react';
+import { BarChart, Activity, PieChart as PieChartIcon, CheckCircle } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart as RechartsBarChart, Bar
 } from 'recharts';
+import { executeService } from '../lib/api';
 
 const mockChartData = [
   { name: 'Mon', volume: 400 },
@@ -25,6 +26,8 @@ const mockUsageData = [
 const Analytics = () => {
   const [analyticsReports, setAnalyticsReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [purchasing, setPurchasing] = useState(false);
+  const [purchaseResult, setPurchaseResult] = useState(null);
 
   useEffect(() => {
     fetch('http://localhost:8000/api/stats/')
@@ -42,6 +45,20 @@ const Analytics = () => {
       });
   }, []);
 
+  const handlePurchase = async () => {
+    setPurchasing(true);
+    setPurchaseResult(null);
+    try {
+      const data = await executeService('analytics');
+      setPurchaseResult(data.result);
+      // Could re-fetch stats here to update UI
+    } catch (err) {
+      setPurchaseResult(`Error: ${err.message}`);
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="p-8">
@@ -55,10 +72,23 @@ const Analytics = () => {
             <p className="text-slate-400 mt-2 text-lg">
               On-chain volume and agent behavior trends.
             </p>
+            {purchaseResult && (
+              <div className="mt-4 text-sm bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-300 p-3 rounded-lg flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" />
+                {purchaseResult}
+              </div>
+            )}
           </div>
-          <button className="flex items-center gap-2 bg-fuchsia-500/10 hover:bg-fuchsia-500/20 text-fuchsia-400 px-4 py-2 rounded-lg border border-fuchsia-500/20 transition-all font-medium">
-            <BarChart className="w-4 h-4" />
-            Buy New Report
+          <button 
+            onClick={handlePurchase}
+            disabled={purchasing}
+            className="flex items-center gap-2 bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl border border-white/10 transition-all font-bold shadow-[0_0_15px_rgba(192,38,211,0.3)] hover:shadow-[0_0_25px_rgba(192,38,211,0.5)]"
+          >
+            {purchasing ? (
+              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Executing on Base...</>
+            ) : (
+              <><BarChart className="w-4 h-4" /> Buy New Report ($0.20)</>
+            )}
           </button>
         </div>
 

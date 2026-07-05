@@ -1,24 +1,32 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Search, Check, AlertTriangle } from 'lucide-react';
+import { executeService } from '../lib/api';
 
 const ReceiptVerification = () => {
   const [orderId, setOrderId] = useState('');
   const [status, setStatus] = useState('idle'); // idle, loading, verified, failed
+  const [verifyResult, setVerifyResult] = useState('');
   
-  const handleVerify = (e) => {
+  const handleVerify = async (e) => {
     e.preventDefault();
-    if (!orderId) return;
+    const target = orderId.trim();
+    if (!target) return;
     
     setStatus('loading');
+    setVerifyResult('');
     
-    // Simulate network request to verify the receipt
-    setTimeout(() => {
-      if (orderId.length > 20) {
+    try {
+      const data = await executeService('receipt', target);
+      if (data && data.success) {
         setStatus('verified');
+        setVerifyResult(data.result);
       } else {
         setStatus('failed');
       }
-    }, 1500);
+    } catch (err) {
+      console.error(err);
+      setStatus('failed');
+    }
   };
 
   return (
@@ -66,9 +74,9 @@ const ReceiptVerification = () => {
                 <Check className="w-6 h-6 text-teal-400" />
               </div>
               <div>
-                <h3 className="text-lg font-medium text-teal-400 mb-1">Receipt Verified</h3>
+                <h3 className="text-lg font-medium text-teal-400 mb-1">Receipt Verified On-Chain</h3>
                 <p className="text-slate-300 leading-relaxed mb-4">
-                  This transaction has been cryptographically verified on the Base network. The cryptographic signature matches the LedgerOps Oracle provider.
+                  {verifyResult ? verifyResult : "This transaction has been cryptographically verified on the Base network. The cryptographic signature matches the LedgerOps Oracle provider."}
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">

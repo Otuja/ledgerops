@@ -12,4 +12,5 @@ urlpatterns = [
     path('export/<str:agent_id>/', views.export_taxes, name='export-taxes'),
     path('trust-score/<str:agent_id>/', views.get_trust_score, name='trust-score'),
     path('trust-lookups/', views.list_trust_lookups, name='trust-lookups'),
+    path('execute-service/', views.execute_service, name='execute-service'),
 ]

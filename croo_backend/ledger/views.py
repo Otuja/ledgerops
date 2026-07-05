@@ -273,3 +273,112 @@ def list_trust_lookups(request):
             'created_at': lookup.created_at,
         })
     return Response(data, status=status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# Interactive Dashboard Services
+# ---------------------------------------------------------------------------
+
+@api_view(['POST'])
+def execute_service(request):
+    import asyncio
+    import os
+    import time
+    from croo import AgentClient, Config
+    from decouple import config as decouple_config
+    import json
+    
+    service_type = request.data.get('service_type')
+    target_agent_id = request.data.get('target_agent_id')
+    
+    if not service_type:
+        return Response({'error': 'service_type is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Convert frontend service names to exact pure-JSON payloads the backend expects
+    if service_type == 'trust':
+        metadata_dict = {"trust": "true", "target": target_agent_id}
+    elif service_type == 'tax':
+        metadata_dict = {"export": "true"}
+    elif service_type == 'analytics':
+        metadata_dict = {"report": "true"}
+    elif service_type == 'receipt':
+        metadata_dict = {"verify": "true"}
+    else:
+        return Response({'error': 'invalid service_type'}, status=status.HTTP_400_BAD_REQUEST)
+
+    def run_purchase():
+        provider_agent_id = 'c1266046-1744-4cf6-a8a5-ba5eb35bccca' # LedgerOps
+        buyer_key = decouple_config('CROO_SECONDARY_BUYER_SDK_KEY', default='')
+        
+        croo_config = Config(
+            base_url=decouple_config('CROO_API_URL', default='https://api.croo.network'),
+            ws_url=decouple_config('CROO_WS_URL', default='wss://api.croo.network/ws'),
+            rpc_url=decouple_config('BASE_RPC_URL', default='https://mainnet.base.org'),
+        )
+        buyer_client = AgentClient(croo_config, buyer_key)
+        
+        async def do_buy():
+            from croo.models import NegotiateOrderRequest, ServiceFilter
+            try:
+                # 1. Fetch provider's active service ID
+                services = await buyer_client.get_services(query=ServiceFilter(agent_id=provider_agent_id))
+                if not services:
+                    return {"error": "Provider LedgerOps has no registered services."}
+                target_service_id = services[0].service_id
+                
+                # 2. Negotiate with perfect JSON metadata
+                req = NegotiateOrderRequest(
+                    service_id=target_service_id,
+                    metadata=json.dumps(metadata_dict)
+                )
+                neg = await buyer_client.negotiate_order(req)
+                
+                # 3. Wait for acceptance (timeout 30s)
+                order_id = None
+                for _ in range(30):
+                    check = await buyer_client.get_negotiation(neg.negotiation_id)
+                    if check.status == 'accepted':
+                        order_id = check.order_id
+                        break
+                    elif check.status == 'rejected':
+                        return {"error": f"Negotiation rejected by provider: {check.rejection_reason}"}
+                    time.sleep(1)
+                
+                if not order_id:
+                    return {"error": "Negotiation timed out."}
+                
+                # 4. Wait for order to be created
+                for _ in range(30):
+                    order = await buyer_client.get_order(order_id)
+                    if order.status == 'created':
+                        break
+                    time.sleep(1)
+                
+                # 5. Pay for the order
+                await buyer_client.pay_order(order_id)
+                
+                # 6. Wait for delivery
+                for _ in range(60):
+                    order = await buyer_client.get_order(order_id)
+                    if order.status == 'delivered':
+                        return {
+                            "success": True, 
+                            "order_id": order_id, 
+                            "result": order.deliverable_text,
+                            "tx_hash": getattr(order, 'tx_hash', None)
+                        }
+                    time.sleep(1)
+                    
+                return {"error": "Payment succeeded but provider timed out during delivery."}
+                
+            except Exception as ex:
+                return {"error": str(ex)}
+            finally:
+                await buyer_client.close()
+                
+        return asyncio.run(do_buy())
+
+    result = run_purchase()
+    if "error" in result:
+        return Response(result, status=status.HTTP_400_BAD_REQUEST)
+    return Response(result, status=status.HTTP_200_OK)

@@ -44,3 +44,14 @@ export const fetchTrustLookups = async () => {
   if (!res.ok) throw new Error('Failed to fetch trust lookups');
   return res.json();
 };
+
+export const executeService = async (serviceType, targetAgentId = '') => {
+  const res = await fetch(`${BASE_URL}/execute-service/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ service_type: serviceType, target_agent_id: targetAgentId }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to execute service');
+  return data;
+};

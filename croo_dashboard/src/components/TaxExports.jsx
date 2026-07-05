@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Download, FileText, Calendar, CheckCircle } from 'lucide-react';
+import { executeService } from '../lib/api';
 
 const TaxExports = () => {
   const [exports, setExports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [purchasing, setPurchasing] = useState(false);
+  const [purchaseResult, setPurchaseResult] = useState(null);
 
   useEffect(() => {
     // Fetch stats and filter for Tax Export transactions
@@ -22,6 +25,20 @@ const TaxExports = () => {
       });
   }, []);
 
+  const handlePurchase = async () => {
+    setPurchasing(true);
+    setPurchaseResult(null);
+    try {
+      const data = await executeService('tax');
+      setPurchaseResult(data.result);
+      // Could re-fetch stats here to update UI
+    } catch (err) {
+      setPurchaseResult(`Error: ${err.message}`);
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="p-8">
@@ -35,10 +52,23 @@ const TaxExports = () => {
             <p className="text-slate-400 mt-2 text-lg">
               Downloadable, compliant tax records for your automated agents.
             </p>
+            {purchaseResult && (
+              <div className="mt-4 text-sm bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 p-3 rounded-lg flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" />
+                {purchaseResult}
+              </div>
+            )}
           </div>
-          <button className="flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-4 py-2 rounded-lg border border-emerald-500/20 transition-all font-medium">
-            <Calendar className="w-4 h-4" />
-            Generate New Report
+          <button 
+            onClick={handlePurchase}
+            disabled={purchasing}
+            className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl border border-white/10 transition-all font-bold shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)]"
+          >
+            {purchasing ? (
+              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Executing on Base...</>
+            ) : (
+              <><Calendar className="w-4 h-4" /> Generate New Report ($0.20)</>
+            )}
           </button>
         </div>
 
