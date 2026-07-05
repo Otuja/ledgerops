@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, ShieldCheck, AlertTriangle, AlertOctagon, Users, Clock, TrendingUp, Zap, Flag, CreditCard } from 'lucide-react';
-import { fetchTrustScore, executeService } from '../lib/api';
+import { fetchTrustScore, executeService, fetchTrustLookups } from '../lib/api';
 import { usePolling } from '../hooks/usePolling';
 
 // Determine badge color and label from trust score
@@ -97,7 +97,7 @@ export default function AgentLookup() {
   const [purchasing, setPurchasing] = useState(false);
   const [error, setError]   = useState('');
   const [searched, setSearched] = useState(false);
-  const { data } = usePolling(fetchTrustScore, 10000);
+  const { data } = usePolling(fetchTrustLookups, 10000);
   const lookups = data || [];
 
   const handleLookup = async () => {
