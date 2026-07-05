@@ -285,17 +285,31 @@ class Command(BaseCommand):
                 # metadata_str comes from the negotiation — parse JSON target from it
                 target_agent_id_lookup = buyer_id  # safe default
                 import json
-                try:
-                    # metadata_str is lowercased, so load from the raw negotiation metadata
-                    if order.negotiation_id:
+                
+                if order.negotiation_id:
+                    try:
+                        # metadata_str is lowercased, so load from the raw negotiation metadata
                         neg_raw = await client.get_negotiation(order.negotiation_id)
                         raw_metadata = str(getattr(neg_raw, 'metadata', '') or '{}')
                         meta_dict = json.loads(raw_metadata)
-                        if 'target' in meta_dict:
+                        
+                        # 1. Handle official CROO dashboard's nested "text" wrapper
+                        if 'text' in meta_dict and isinstance(meta_dict['text'], str):
+                            try:
+                                inner_meta = json.loads(meta_dict['text'])
+                                if 'target' in inner_meta:
+                                    target_agent_id_lookup = inner_meta['target']
+                            except Exception:
+                                pass # Inner string isn't JSON, rely on fallback
+                                
+                        # 2. Handle pure un-nested JSON (like from our React UI)
+                        if target_agent_id_lookup == buyer_id and 'target' in meta_dict:
                             target_agent_id_lookup = meta_dict['target']
-                except Exception as me:
-                    logger.warning("Could not parse trust target from metadata: %s", me)
-                    # Final fallback: try extracting from lowercased metadata_str
+                    except Exception as me:
+                        logger.warning("Could not parse trust target from JSON metadata: %s", me)
+                        
+                # 3. Final fallback: try extracting directly from lowercased metadata_str
+                if target_agent_id_lookup == buyer_id:
                     parts = metadata_str.split('target', 1)
                     if len(parts) > 1:
                         # grab the UUID-like value after 'target': '
