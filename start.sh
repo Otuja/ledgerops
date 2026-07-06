@@ -1,22 +1,19 @@
 #!/bin/bash
-# start.sh â€” Render startup script
-# Ensures run_agent is always killed cleanly when gunicorn stops,
-# preventing the "duplicate key" WebSocket error on redeploy.
+# start.sh -- Render startup script
+# Kills run_agent cleanly when gunicorn stops to prevent duplicate key on redeploy.
 
 set -e
-
 cd croo_backend
 
 echo "[start.sh] Starting LedgerOps..."
 
-# â”€â”€ Background agent loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 agent_loop() {
-    echo "[start.sh] Agent: waiting 15s for old WebSocket to expire..."
+    echo "[start.sh] Waiting 15s for previous WebSocket to expire..."
     sleep 15
     while true; do
-        echo "[start.sh] Agent: starting run_agent..."
+        echo "[start.sh] Starting run_agent..."
         timeout 7200 python manage.py run_agent || true
-        echo "[start.sh] Agent: exited, retrying in 15s..."
+        echo "[start.sh] run_agent exited, retrying in 15s..."
         sleep 15
     done
 }
@@ -25,18 +22,13 @@ agent_loop &
 AGENT_PID=$!
 echo "[start.sh] Agent loop PID: $AGENT_PID"
 
-# â”€â”€ Cleanup: kill agent when this script exits for any reason â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 cleanup() {
-    echo "[start.sh] Shutting down â€” killing agent loop (PID $AGENT_PID)..."
+    echo "[start.sh] Shutdown -- killing agent (PID $AGENT_PID)..."
     kill "$AGENT_PID" 2>/dev/null || true
     wait "$AGENT_PID" 2>/dev/null || true
-    echo "[start.sh] Agent loop stopped cleanly."
+    echo "[start.sh] Done."
 }
 trap cleanup EXIT TERM INT
 
-# â”€â”€ Gunicorn in foreground â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 echo "[start.sh] Starting gunicorn..."
 gunicorn --bind "0.0.0.0:$PORT" --chdir croo_backend croo_backend.wsgi:application
-
-# When gunicorn exits (TERM from Render), the shell continues here,
-# runs cleanup() via the EXIT trap, which kills the agent loop.
