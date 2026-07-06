@@ -36,9 +36,9 @@ export default function NegotiationPanel({ negotiations, loading }) {
                 Service: <span className="font-semibold text-white">{neg.service_id || 'Unknown'}</span>
               </div>
               <div className="flex items-center gap-2 text-[10px] text-surface-400 uppercase">
-                <span className="bg-surface-900 px-2 py-1 rounded">Req: {neg.requester_agent_id.substring(0,8) || 'N/A'}</span>
+                <span className="bg-surface-900 px-2 py-1 rounded">Req: {(neg.requester_agent_id || 'N/A').substring(0,8)}</span>
                 <span className="text-surface-600">→</span>
-                <span className="bg-surface-900 px-2 py-1 rounded">Prov: {neg.provider_agent_id.substring(0,8) || 'N/A'}</span>
+                <span className="bg-surface-900 px-2 py-1 rounded">Prov: {(neg.provider_agent_id || 'N/A').substring(0,8)}</span>
               </div>
             </div>
           ))

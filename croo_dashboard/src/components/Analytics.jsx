@@ -4,7 +4,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart as RechartsBarChart, Bar
 } from 'recharts';
-import { executeService } from '../lib/api';
+import { executeService, fetchLogs } from '../lib/api';
 
 const mockChartData = [
   { name: 'Mon', volume: 400 },
@@ -30,11 +30,13 @@ const Analytics = () => {
   const [purchaseResult, setPurchaseResult] = useState(null);
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/stats/')
-      .then((res) => res.json())
+    fetchLogs()
       .then((data) => {
-        const reports = (data.transactions || []).filter(tx => 
-          tx.service_id.includes('1ba06feb') || tx.service_id.toLowerCase().includes('analytics')
+        const reports = (Array.isArray(data) ? data : []).filter(tx =>
+          tx.service_id && (
+            tx.service_id.toLowerCase().includes('analytics') ||
+            tx.service_id.toLowerCase().includes('report')
+          )
         );
         setAnalyticsReports(reports);
         setLoading(false);
