@@ -22,7 +22,7 @@ Procfile text eol=lf
 # Windows batch files stay CRLF
 *.bat   text eol=crlf
 
-# Binary files — no conversion
+# Binary files â€” no conversion
 *.png   binary
 *.jpg   binary
 *.jpeg  binary
