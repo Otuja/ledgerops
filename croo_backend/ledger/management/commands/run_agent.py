@@ -249,7 +249,7 @@ class Command(BaseCommand):
                     return wallet.balance_usdc if wallet else '0.000000'
                 
                 bal = await sync_to_async(_get_balance)()
-                formatted_bal = float(bal) / 1000000 if bal else 0
+                formatted_bal = float(bal) if bal else 0
                 deliver_text = f"WALLET BALANCE: {formatted_bal:.6f} USDC"
                 self.stdout.write(self.style.SUCCESS(f"Delivered balance check for {buyer_id}"))
 
@@ -260,7 +260,7 @@ class Command(BaseCommand):
                 
                 last_tx = await sync_to_async(_get_last_tx)()
                 if last_tx:
-                    formatted_amt = float(last_tx.amount_usdc) / 1000000 if last_tx.amount_usdc else 0
+                    formatted_amt = float(last_tx.amount_usdc) if last_tx.amount_usdc else 0
                     deliver_text = f"VERIFIED. Last order {last_tx.order_id} was {formatted_amt:.6f} USDC. Status: {last_tx.status}."
                 else:
                     deliver_text = "INVALID. No verified transactions found for this agent."
@@ -274,7 +274,7 @@ class Command(BaseCommand):
                     return total or 0, count
 
                 total_spent, tx_count = await sync_to_async(_get_report)()
-                formatted_total = float(total_spent) / 1000000 if total_spent else 0
+                formatted_total = float(total_spent) if total_spent else 0
                 deliver_text = f"ANALYTICS REPORT: Total spent = {formatted_total:.6f} USDC across {tx_count} transactions."
                 self.stdout.write(self.style.SUCCESS(f"Delivered analytics report for {buyer_id}"))
 
